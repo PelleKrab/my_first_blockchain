@@ -26,7 +26,7 @@ impl Blockchain {
     }
 
     fn create_genesis_block() -> Block {
-        Block {
+        let mut genesis_block = Block {
             index: 0,
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -34,9 +34,12 @@ impl Blockchain {
                 .as_secs(),
             data: "Genesis Block".to_string(),
             previous_hash: "0".to_string(),
-            hash: calculate_hash(0, 0, "Genesis Block", "0"),
+            hash: "0".to_string(),
             nonce: 0,
-        }
+        };
+        genesis_block.hash = calculate_hash(&genesis_block);
+
+        genesis_block
     }
 
     fn add_block(&mut self, data: String, _nonce: u64) -> bool {
@@ -52,10 +55,10 @@ impl Blockchain {
             hash: String::new(),
             nonce: _nonce,
         };
-
+x
         // let new_block = calculate_hash(new_block.index, new_block.timestamp, &new_block.data, &new_block.previous_hash);
 
-        if self.is_block_valid(&new_block) {
+        if self.is_block_valid(&calculate_hash(&new_block)) && new_block.index == last_block.index {
             self.chain.push(new_block);
             return true;
         } else {
@@ -73,35 +76,25 @@ impl Blockchain {
             let first = &window[0];
             let second = &window[1];
             self.is_blockpair_valid(second, first)
-        }) && self.is_block_valid(self.chain.last().unwrap())
+        }) && self.is_block_valid(&calculate_hash(self.chain.last().unwrap()))
     }
 
     fn is_blockpair_valid(&self, new: &Block, old: &Block) -> bool {
-        if new.previous_hash != old.hash && new.index != old.index + 1 && self.is_block_valid(old) {
+        if new.previous_hash != old.hash && new.index != old.index + 1 && self.is_block_valid(&calculate_hash(old)) {
             return false;
         }
 
         true
     }
 
-    fn is_block_valid(&self, block: &Block) -> bool {
+    fn is_block_valid(&self, hash: &str) -> bool {
         let mut is_valid = true;
-        let mut hash: String = calculate_hash(
-            block.index,
-            block.timestamp,
-            &block.data,
-            &block.previous_hash,
-        );
 
         for _ in 0..self.difficulty {
             if hash.chars().any(|c| c != '0') {
                 is_valid = false;
                 break;
             }
-        }
-
-        if block.index == self.chain.last().unwrap().index {
-            is_valid = false;
         }
 
         is_valid
@@ -129,11 +122,13 @@ impl Block {
                 nonce: nonce,
             };
 
-            if chain.is_block_valid(&new_block) {
+            let hash = calculate_hash(&new_block);
+
+            if chain.is_block_valid(&hash) {
                 return new_block;
             }
 
-            if nonce % 10000 == 0 {
+            if nonce % 100000 == 0 {
                 timestamp = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap()
@@ -145,12 +140,12 @@ impl Block {
     }
 }
 
-fn calculate_hash(index: u128, timestamp: u64, data: &str, previous_hash: &str) -> String {
+fn calculate_hash(block: &Block) -> String {
     let mut hasher = Sha256::new();
-    hasher.update(index.to_string().as_bytes());
-    hasher.update(timestamp.to_string().as_bytes());
-    hasher.update(data.as_bytes());
-    hasher.update(previous_hash.as_bytes());
+    hasher.update(&block.index.to_string().as_bytes());
+    hasher.update(&block.timestamp.to_string().as_bytes());
+    hasher.update(&block.data.as_bytes());
+    hasher.update(&block.previous_hash.as_bytes());
 
     format!("{:x}", hasher.finalize())
 }
