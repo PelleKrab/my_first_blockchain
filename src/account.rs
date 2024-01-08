@@ -1,3 +1,6 @@
+use secp256k1::{Secp256k1, Message, PublicKey};
+use sha3::{Digest, Keccak256};
+
 struct Account {
     address: String, 
     balance: u64,  
@@ -32,4 +35,6 @@ impl Account {
     fn display_info(&self) {
         println!("Address: {}\nBalance: {}\nNonce: {}", self.address, self.balance, self.nonce);
     }
+
+
 }
