@@ -1,5 +1,5 @@
 
-use secp256k1::{SecretKey, Secp256k1, Message, ecdsa::Signature, ecdsa::RecoverableSignature}; 
+use secp256k1::{SecretKey, Secp256k1, Message, ecdsa::RecoveryId, ecdsa::RecoverableSignature}; 
 use sha3::{Digest, Keccak256};
 
 
@@ -14,7 +14,31 @@ pub fn sign_transaction(key: SecretKey, sender: String, receiver: String, amount
     let (rec_id, sig_bytes) = recoverable_sig.serialize_compact();
 
     let mut signature = sig_bytes.to_vec();
-    signature.push(rec_id.to_i32() as u8 + 27); // Adding 27 to match Ethereum's recovery ID offset
-
+    signature.push(rec_id.to_i32() as u8 + 27); 
     signature
+}
+
+pub fn public_key_to_address(public_key: &secp256k1::PublicKey) -> String {
+    let serialized_public_key = public_key.serialize_uncompressed();
+    let mut hasher = Keccak256::new();
+    hasher.update(&serialized_public_key[1..]);
+    let hash = hasher.finalize();
+    let hash = &hash[12..];
+    let mut address = String::from("0x");
+    for byte in hash {
+        address.push_str(&format!("{:x}", byte));
+    }
+    address
+}
+
+pub fn recover_public_key(
+    msg: &Message,
+    sig: &[u8],
+) -> Result<secp256k1::PublicKey, secp256k1::Error> {
+    let secp = Secp256k1::new();
+    // let message = Message::from_digest_slice(msg)?;
+    let recovery_id_value = sig[64] as i32 - 27;
+    let recovery_id = RecoveryId::from_i32(recovery_id_value)?;
+    let signature = RecoverableSignature::from_compact(&sig[0..64], recovery_id)?;
+    secp.recover_ecdsa(&msg, &signature)
 }

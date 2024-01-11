@@ -3,8 +3,10 @@ use secp256k1::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sha2::Digest;
-use sha2::Sha256;
+use sha2::{Sha256};
+use sha3::{Digest, Keccak256};
+
+use crate::utils::{public_key_to_address, recover_public_key};
 
 #[derive(Serialize, Deserialize)]
 pub struct Transaction {
@@ -34,24 +36,21 @@ impl Transaction {
     }
 
     // Method to verify the transaction's signature
-    fn verify_signature(&self) -> bool {
-        // self.signature
+    pub fn verify_signature(&self) -> bool {
+        let message = Message::from_digest_slice(&self.calculate_hash()).expect("Failed to convert message hash");
+        let public_key = recover_public_key(&message, &self.signature).unwrap();
 
+        let address = public_key_to_address(&public_key);
+        println!("{}", address);
+        println!("{}", self.sender);
+        if address != self.sender && address != self.receiver && self.amount == 0{
+            return false;
+        }
+
+        
         true
     }
 
-    pub fn recover_public_key(
-        &self,
-        msg: &Message,
-        sig: &[u8],
-    ) -> Result<secp256k1::PublicKey, secp256k1::Error> {
-        let secp = Secp256k1::new();
-        // let message = Message::from_digest_slice(msg)?;
-        let recovery_id_value = sig[64] as i32 - 27;
-        let recovery_id = RecoveryId::from_i32(recovery_id_value)?;
-        let signature = RecoverableSignature::from_compact(&sig[0..64], recovery_id)?;
-        secp.recover_ecdsa(&msg, &signature)
-    }
 
     // Serialize the transaction into a string
     fn serialize(&self) -> String {
@@ -67,11 +66,9 @@ impl Transaction {
     }
 
     // Calculate the hash of the transaction
-    fn calculate_hash(&self) -> Vec<u8> {
+    fn calculate_hash(&self) -> [u8; 32] {
         let serialized_transaction = self.serialize();
-        let mut hasher = Sha256::new();
-        hasher.update(serialized_transaction.as_bytes());
-        hasher.finalize().to_vec()
+        Keccak256::digest(serialized_transaction.as_bytes()).into()
     }
 
     // Check if the transaction is valid

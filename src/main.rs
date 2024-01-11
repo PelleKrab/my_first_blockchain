@@ -1,13 +1,10 @@
-mod blockchain;
-use blockchain::Blockchain;
-mod transaction;
+use my_first_blockchain::{blockchain::Blockchain, utils::recover_public_key};
+use my_first_blockchain::transaction;
 use libp2p;
 use secp256k1::{Secp256k1, PublicKey, SecretKey, rand, Message};
 use sha3::{Digest, Keccak256};
 use transaction::Transaction;
-
-mod utils;
-use utils::sign_transaction;
+use my_first_blockchain::utils::{sign_transaction, public_key_to_address};
 
 fn generate_key_pair() -> (SecretKey, PublicKey) {
     let secp = Secp256k1::new();
@@ -21,7 +18,7 @@ fn main() {
     // blockchain.mine_block("Test");
     let (prikey, pubkey) = generate_key_pair();
 
-    let sender = "0x1234".to_string();
+    let sender = public_key_to_address(&pubkey);
     let receiver = "0x5678".to_string();
     let amount = 100;
     let nonce = 0;
@@ -35,11 +32,13 @@ fn main() {
 
     let transaction = Transaction::new(sender.clone(), receiver.clone(), amount, nonce, signature.clone());
 
-    let recovered_pubkey = transaction.recover_public_key(&message_hash, &signature);
+    let recovered_pubkey = recover_public_key(&message_hash, &signature);
 
     assert_eq!(recovered_pubkey, Ok(pubkey));
+    
     println!("Public key: {:?}", pubkey);
     println!("Recovered public key: {:?}", recovered_pubkey);
+    assert_eq!(transaction.verify_signature(), true);
 
     
 
