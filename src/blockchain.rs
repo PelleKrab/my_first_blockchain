@@ -4,7 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 
 
-struct Block {
+pub struct Block {
     index: u128,
     timestamp: u64,
     data: String,
@@ -72,7 +72,7 @@ impl Blockchain {
     }
 
     /// Checks if the blockchain is valid.
-    fn is_chain_valid(&self, chain: &[Block]) -> bool {
+   pub fn is_chain_valid(&self, chain: &[Block]) -> bool {
         chain.windows(2).all(|window| {
             let first = &window[0];
             let second = &window[1];
@@ -150,6 +150,11 @@ impl Blockchain {
     // Getter for chain
     pub fn get_chain(&self) -> &[Block] {
         &self.chain
+    }
+
+    // Getter for chain length
+    pub fn get_chain_length(&self) -> usize {
+        self.chain.len()
     }
 
     // Getter for difficulty
