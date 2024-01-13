@@ -94,16 +94,7 @@ impl Blockchain {
 
     /// Checks if a block is valid.
     fn is_block_valid(&self, hash: &str) -> bool {
-        let mut is_valid = true;
-
-        for _ in 0..self.difficulty {
-            if hash.chars().any(|c| c != '0') {
-                is_valid = false;
-                break;
-            }
-        }
-
-        is_valid
+        hash.starts_with(&"0".repeat(self.difficulty as usize))
     }
 
     /// Mines a new block with the given data.

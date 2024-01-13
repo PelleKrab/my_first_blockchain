@@ -49,10 +49,9 @@ mod tests {
     fn test_add_block() {
         let mut blockchain = Blockchain::new();
         let data = "Test Block".to_string();
-        let nonce = 12345;
-        let timestamp = 1629876543;
 
-        let result = blockchain.add_block(data.clone(), nonce, timestamp);
+
+        let result = blockchain.mine_block(&data);
 
         assert_eq!(result, true);
         assert_eq!(blockchain.get_chain_length(), 2);
@@ -62,7 +61,6 @@ mod tests {
         assert_eq!(new_block.get_data(), data);
         assert_eq!(new_block.get_previous_hash(), "0");
         assert_ne!(new_block.get_hash(), "0");
-        assert_eq!(new_block.get_nonce(), nonce);
     }
 }
 
