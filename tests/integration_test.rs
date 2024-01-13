@@ -6,6 +6,10 @@ use my_first_blockchain::blockchain::Block;
 mod tests { 
 
 
+    use my_first_blockchain::{utils::{recover_public_key, sign_transaction, public_key_to_address, generate_key_pair}, transaction::Transaction};
+    use secp256k1::Message;
+    use sha3::{Digest, Keccak256};
+
     use super::*;
 
     #[test]
@@ -51,5 +55,29 @@ mod tests {
         assert_ne!(new_block.get_nonce(), 0);
     }
 
+    #[test]
+    fn test_tran    fn test_transaction_sender_valid() {
+        saction_sender_valid() {
+        let (prikey, pubkey) = generate_key_pair();
+
+    let sender = public_key_to_address(&pubkey);
+    let receiver = "0x5678".to_string();
+    let amount = 100;
+    let nonce = 0;
+
+    let signature = sign_transaction(prikey, sender.clone(), receiver.clone(), amount, nonce);
+
+    let message = format!("{}{}{}{}", sender, receiver, amount, nonce);
+    let message_hash = Keccak256::digest(message.as_bytes());
+    let message_hash = Message::from_digest_slice(&message_hash).expect("Failed to convert message hash");
+
+
+    let transaction = Transaction::new(sender.clone(), receiver.clone(), amount, nonce, signature.clone());
+
+    let recovered_pubkey = recover_public_key(&message_hash, &signature);
+
+    assert_eq!(recovered_pubkey, Ok(pubkey));
     
+    assert_eq!(transaction.verify_signature(), true);
+    }
 }

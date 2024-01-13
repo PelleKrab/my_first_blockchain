@@ -1,5 +1,5 @@
 
-use secp256k1::{SecretKey, Secp256k1, Message, ecdsa::RecoveryId, ecdsa::RecoverableSignature}; 
+use secp256k1::{SecretKey, Secp256k1, Message, ecdsa::RecoveryId, ecdsa::RecoverableSignature, PublicKey, rand}; 
 use sha3::{Digest, Keccak256};
 
 
@@ -41,4 +41,10 @@ pub fn recover_public_key(
     let recovery_id = RecoveryId::from_i32(recovery_id_value)?;
     let signature = RecoverableSignature::from_compact(&sig[0..64], recovery_id)?;
     secp.recover_ecdsa(&msg, &signature)
+}
+
+pub fn generate_key_pair() -> (SecretKey, PublicKey) {
+    let secp = Secp256k1::new();
+    let (secret_key, public_key) = secp.generate_keypair(&mut rand::thread_rng());
+    (secret_key, public_key)
 }
