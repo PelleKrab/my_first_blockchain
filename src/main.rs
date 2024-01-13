@@ -43,7 +43,7 @@ fn main() {
     let mut blockchain = Blockchain::new();
     let data = "Test Block".to_string();
 
-    let result = blockchain.mine_block(&data);
+    let result = blockchain.mine_block(data);
 
     assert_eq!(result, true);
 

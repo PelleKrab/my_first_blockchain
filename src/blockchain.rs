@@ -98,7 +98,7 @@ impl Blockchain {
     }
 
     /// Mines a new block with the given data.
-    pub fn mine_block(&mut self, data: &str) -> bool {
+    pub fn mine_block(&mut self, data: String) -> bool {
         info!("mining block...");
         let mut nonce = 0;
         let mut _timestamp = SystemTime::now()
