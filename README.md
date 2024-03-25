@@ -7,5 +7,3 @@ This a proof of concept mainly for me to get familiar with Rust and blockchain b
   <li>State Check</li>
   <li>Gas</li>
   <li>Consensus Mechanisms</li>
-  <li>CLI cleint</li>
-  <li>EVM?</li>
