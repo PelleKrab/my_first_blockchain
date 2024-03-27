@@ -39,7 +39,7 @@ fn main() {
     assert_eq!(transaction1.verify_signature(), true);
 
     let mut blockchain = Blockchain::new();
-    let data = !vec(transaction1,transaction2);
+    let data = vec!(transaction1,transaction2);
 
     let result = blockchain.mine_block(data);
 
@@ -48,9 +48,9 @@ fn main() {
     assert_eq!(blockchain.is_chain_valid(blockchain.get_chain()), true);
 
     let transaction_to_check = Transaction::new(sender.clone(), receiver.clone(), amount, nonce, signature1.clone());
-    let is_included = blockchain.is_transaction_included(&transaction_to_check);
+    // let is_included = blockchain.is_transaction_included(&transaction_to_check);
 
-    println!("Is transaction included: {}", is_included);
+    // println!("Is transaction included: {}", is_included);
 
     
 
