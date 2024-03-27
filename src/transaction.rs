@@ -16,7 +16,17 @@ pub struct Transaction {
     nonce: u64,
     signature: Vec<u8>,
 }
-
+impl Clone for Transaction {
+    fn clone(&self) -> Self {
+        Transaction {
+            sender: self.sender.clone(),
+            receiver: self.receiver.clone(),
+            amount: self.amount,
+            nonce: self.nonce,
+            signature: self.signature.clone(),
+        }
+    }
+}
 impl Transaction {
     // Create a new transaction
     pub fn new(
@@ -52,16 +62,13 @@ impl Transaction {
     }
 
 
-    // Serialize the transaction into a string
-    fn serialize(&self) -> String {
-        format!(
-            "{}{}{}{}",
-            self.sender, self.receiver, self.amount, self.nonce
-        )
+    // Serialize the transaction into a JSON string
+    pub fn serialize(&self) -> String {
+        serde_json::to_string(self).unwrap()
     }
 
-    // Deserialize a string into a Transaction
-    fn deserialize(transaction_data: &str) -> Transaction {
+    // Deserialize a JSON string into a Transaction
+    pub fn deserialize(transaction_data: &str) -> Transaction {
         serde_json::from_str(transaction_data).unwrap()
     }
 
@@ -87,6 +94,7 @@ impl Transaction {
         println!("{:?}", self.to_string());
     }
 
+
     fn to_string(&self) -> String {
         format!(
             "Sender: {}\nReceiver: {}\nAmount: {}\nNonce: {}\nSignature: {:?}",
@@ -96,5 +104,25 @@ impl Transaction {
 
     fn to_json(&self) -> String {
         serde_json::to_string(self).unwrap()
+    }
+
+    pub fn get_sender(&self) -> &str {
+        &self.sender
+    }
+
+    pub fn get_receiver(&self) -> &str {
+        &self.receiver
+    }
+
+    pub fn get_amount(&self) -> u64 {
+        self.amount
+    }
+
+    pub fn get_nonce(&self) -> u64 {
+        self.nonce
+    }
+
+    pub fn get_signature(&self) -> &[u8] {
+        &self.signature
     }
 }

@@ -48,3 +48,4 @@ pub fn generate_key_pair() -> (SecretKey, PublicKey) {
     let (secret_key, public_key) = secp.generate_keypair(&mut rand::thread_rng());
     (secret_key, public_key)
 }
+

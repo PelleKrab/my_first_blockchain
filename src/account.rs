@@ -6,7 +6,7 @@ struct Account {
     balance: u64,  
     nonce: u64,     
 }
-
+//Need to scan the chain for information about the account
 impl Account {
 
     fn new(address: String) -> Self {

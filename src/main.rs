@@ -18,29 +18,39 @@ fn main() {
     let amount = 100;
     let nonce = 0;
 
-    let signature = sign_transaction(prikey, sender.clone(), receiver.clone(), amount, nonce);
+    let signature1 = sign_transaction(prikey, sender.clone(), receiver.clone(), amount, nonce);
+    let signature2 = sign_transaction(prikey, sender.clone(), receiver.clone(), amount+1, nonce+1);
+
 
     let message = format!("{}{}{}{}", sender, receiver, amount, nonce);
     let message_hash = Keccak256::digest(message.as_bytes());
     let message_hash = Message::from_digest_slice(&message_hash).expect("Failed to convert message hash");
 
 
-    let transaction = Transaction::new(sender.clone(), receiver.clone(), amount, nonce, signature.clone());
+    let transaction1 = Transaction::new(sender.clone(), receiver.clone(), amount, nonce, signature1.clone());
+    let transaction2 = Transaction::new(sender.clone(), receiver.clone(), amount+1, nonce+1, signature2.clone());
 
-    let recovered_pubkey = recover_public_key(&message_hash, &signature);
+    let recovered_pubkey = recover_public_key(&message_hash, &signature1);
 
     assert_eq!(recovered_pubkey, Ok(pubkey));
     
     println!("Public key: {:?}", pubkey);
     println!("Recovered public key: {:?}", recovered_pubkey);
-    assert_eq!(transaction.verify_signature(), true);
+    assert_eq!(transaction1.verify_signature(), true);
 
     let mut blockchain = Blockchain::new();
-    let data = "Test Block".to_string();
+    let data = !vec(transaction1,transaction2);
 
     let result = blockchain.mine_block(data);
 
     assert_eq!(result, true);
+
+    assert_eq!(blockchain.is_chain_valid(blockchain.get_chain()), true);
+
+    let transaction_to_check = Transaction::new(sender.clone(), receiver.clone(), amount, nonce, signature1.clone());
+    let is_included = blockchain.is_transaction_included(&transaction_to_check);
+
+    println!("Is transaction included: {}", is_included);
 
     
 

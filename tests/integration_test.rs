@@ -5,6 +5,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[cfg(test)]
 mod tests {
 
+    use std::vec;
+
     use my_first_blockchain::{
         transaction::Transaction,
         utils::{generate_key_pair, public_key_to_address, recover_public_key, sign_transaction},
@@ -30,7 +32,34 @@ mod tests {
     #[test]
     fn test_is_chain_valid() {
         let mut blockchain = Blockchain::new();
-        let data = "Test Block".to_string();
+        //sender: String,
+        // receiver: String,
+        // amount: u64,
+        // nonce: u64,
+        // signature: Vec<u8>
+        let data = vec![
+            Transaction::new(
+                "sender1".to_string(),
+                "receiver1".to_string(),
+                10,
+                0,
+                "signature1".to_vec(),
+            ),
+            Transaction::new(
+                "sender2".to_string(),
+                "receiver2".to_string(),
+                20,
+                1,
+                "signature2".to_string(),
+            ),
+            Transaction::new(
+                "sender3".to_string(),
+                "receiver3".to_string(),
+                30,
+                2,
+                "signature3".to_string(),
+            ),
+        ];
 
         for _ in 0..5 {
             blockchain.mine_block(data.clone());
