@@ -47,13 +47,14 @@ fn main() {
 
     assert_eq!(blockchain.is_chain_valid(blockchain.get_chain()), true);
 
+    println!("New test:");
     let transaction_to_check = Transaction::new(sender.clone(), receiver.clone(), amount, nonce, signature1.clone());
-    // let is_included = blockchain.is_transaction_included(&transaction_to_check);
+    let is_included = blockchain.check_transaction_validity(&transaction_to_check);
 
-    // println!("Is transaction included: {}", is_included);
+    println!("Is transaction included: {}", is_included);
 
     
-
+    // Quick frontend and add function that searches the chain for accounts
     
 }
 

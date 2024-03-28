@@ -51,8 +51,6 @@ impl Transaction {
         let public_key = recover_public_key(&message, &self.signature).unwrap();
 
         let address = public_key_to_address(&public_key);
-        println!("{}", address);
-        println!("{}", self.sender);
         if address != self.sender && address != self.receiver && self.amount == 0{
             return false;
         }

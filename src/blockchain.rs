@@ -1,4 +1,5 @@
 use crate::transaction::{self, Transaction};
+use libp2p::multihash::Error;
 use log::{error, info};
 use rs_merkle::{algorithms::Sha256 as mk_Sha256, Hasher, MerkleTree};
 use serde::Serialize;
@@ -32,7 +33,7 @@ impl Blockchain {
     pub fn new() -> Blockchain {
         Blockchain {
             chain: vec![Blockchain::create_genesis_block()],
-            difficulty: 1,
+            difficulty: 0,
         }
     }
 
@@ -49,7 +50,14 @@ impl Blockchain {
             data: vec::Vec::new(),
             // TO DO:
             // FIX genisis transaction
-            merkle_root: Self::calculate_merkle_root(&vec![Transaction::new("me".to_string(), "me".to_string(), 0, 0, vec![])]).unwrap(),
+            merkle_root: Self::calculate_merkle_root(&vec![Transaction::new(
+                "me".to_string(),
+                "me".to_string(),
+                0,
+                0,
+                vec![],
+            )])
+            .unwrap(),
             previous_hash: "0".to_string(),
             hash: "0".to_string(),
             nonce: 0,
@@ -59,7 +67,7 @@ impl Blockchain {
         genesis_block
     }
 
-    pub fn calculate_merkle_tree(tx_list: &Vec<Transaction>) -> Result<MerkleTree<mk_Sha256>, &str> {
+    fn calculate_merkle_tree(tx_list: &Vec<Transaction>) -> Result<MerkleTree<mk_Sha256>, &str> {
         let leaves: Vec<[u8; 32]> = tx_list
             .iter()
             .map(|x| mk_Sha256::hash(x.serialize().as_bytes()))
@@ -68,44 +76,65 @@ impl Blockchain {
         Ok(MerkleTree::<mk_Sha256>::from_leaves(&leaves))
     }
 
-    pub fn calculate_merkle_root(tx_list: &Vec<Transaction>) -> Result<[u8; 32], &str> {
+    fn calculate_merkle_root(tx_list: &Vec<Transaction>) -> Result<[u8; 32], &str> {
         let merkle_tree = Self::calculate_merkle_tree(tx_list)?;
         let merkle_root = merkle_tree.root().ok_or("couldn't get the merkle root")?;
         Ok(merkle_root)
     }
 
-    pub fn prove_transaction_in_merkle(
-        tx_list: &Vec<Transaction>,
-        transaction: Transaction,
-        root: String,
+    fn merkle_transaction_proof(
+        &self,
+        transaction: &Transaction,
+        block_index: usize,
+        tx_index: usize,
     ) -> bool {
-        let leaves: Vec<[u8; 32]> = tx_list
-            .iter()
-            .map(|x| mk_Sha256::hash(x.serialize().as_bytes()))
-            .collect();
-    
-            let leaves: Vec<[u8; 32]> = tx_list
+        let leaves: Vec<[u8; 32]> = self
+            .chain
+            .get(block_index)
+            .unwrap()
+            .get_data_raw()
             .iter()
             .map(|x| mk_Sha256::hash(x.serialize().as_bytes()))
             .collect();
 
-        let merkle_tree = MerkleTree::<mk_Sha256>::from_leaves(&leaves);    
-        let transaction_bytes = transaction.serialize().as_bytes().to_vec();
-    
-        let leaf_to_check = tx_list
-            .iter()
-            .enumerate()
-            .find(|(_, tx)| tx.get_signature() == transaction.get_signature())
-            .map(|(index, _)| index);
-    
-        let proof = merkle_tree.proof(&[leaf_to_check.unwrap()]);
-        let indice_to_prove = [leaf_to_check.unwrap()];
+        let merkle_tree = MerkleTree::<mk_Sha256>::from_leaves(&leaves);
+
+        let proof = merkle_tree.proof(&[tx_index]);
+        let indice_to_prove = [tx_index];
         let leave_to_prove = [mk_Sha256::hash(transaction.serialize().as_bytes())];
         let root = merkle_tree.root().ok_or("couldn't get the merkle root");
-        
-        proof.verify(root.unwrap(), &indice_to_prove, &leave_to_prove, leaves.len())
+
+        proof.verify(
+            root.unwrap(),
+            &indice_to_prove,
+            &leave_to_prove,
+            leaves.len(),
+        )
     }
-    
+
+    fn find_block(&self, transaction: &Transaction) -> Result<(usize, usize), &str> {
+        for (block_index, block) in self.chain.iter().enumerate() {
+            // Use the index variable here
+            for (tx_index, tx) in block.get_data_raw().iter().enumerate() {
+                if tx.get_signature() == transaction.get_signature() {
+                    return Ok((block_index, tx_index));
+                }
+            }
+        }
+        Err("Transaction not found")
+    }
+
+    pub fn check_transaction_validity(&mut self, transaction: &Transaction) -> bool {
+        let (block_index, tx_index) = match self.find_block(transaction) {
+            Ok((block_index, tx_index)) => (block_index, tx_index),
+            Err(_) => {
+                // Transaction not found
+                return false;
+            }
+        };
+
+        self.merkle_transaction_proof(transaction, block_index, tx_index)
+    }
 
     /// Adds a new block to the blockchain.
     pub fn add_block(&mut self, new_block: Block) -> bool {
@@ -134,7 +163,7 @@ impl Blockchain {
     /// Checks if a block pair is valid.
     fn is_blockpair_valid(&self, new: &Block, old: &Block) -> bool {
         !(new.index != old.index + 1
-            || self.is_block_valid(&old.calculate_hash())
+            || !self.is_block_valid(&old.calculate_hash())
             || new.previous_hash != old.calculate_hash())
     }
 
@@ -185,24 +214,20 @@ impl Blockchain {
         }
     }
 
-
     fn verify_transaction_block(&self, transaction: &Transaction, block: &Block) {
         //Check transaction data to merkle in verfy block
-
+        
         !todo!()
     }
 
-    // Getter for chain
-    pub fn get_chain(&self) -> &[Block] {
+    pub fn get_chain(&self) -> &Vec<Block> {
         &self.chain
     }
 
-    // Getter for chain length
     pub fn get_chain_length(&self) -> usize {
         self.chain.len()
     }
 
-    // Getter for difficulty
     pub fn get_difficulty(&self) -> u32 {
         self.difficulty
     }
@@ -218,36 +243,22 @@ impl Block {
 
         format!("{:x}", hasher.finalize())
     }
-    // Getter for index
     pub fn get_index(&self) -> u128 {
         self.index
     }
 
-    // Getter for timestamp
     pub fn get_timestamp(&self) -> u64 {
         self.timestamp
     }
 
-    // Getter for data
-    pub fn get_data(&self) -> String {
-        let mut data = String::new();
-        for transaction in &self.data {
-            data.push_str(&format!("{:?}", transaction.serialize()));
-        }
-        data
+    pub fn get_data_raw(&self) -> &Vec<Transaction> {
+        &self.data
     }
 
-    // Getter for previous_hash
-    pub fn get_previous_hash(&self) -> &str {
-        &self.previous_hash
-    }
-
-    // Getter for hash
     pub fn get_hash(&self) -> &str {
         &self.hash
     }
 
-    // Getter for nonce
     pub fn get_nonce(&self) -> u64 {
         self.nonce
     }
