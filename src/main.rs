@@ -45,7 +45,7 @@ fn main() {
 
     assert_eq!(result, true);
 
-    assert_eq!(blockchain.is_chain_valid(blockchain.get_chain()), true);
+    assert_eq!(blockchain.is_chain_valid(), true);
 
     println!("New test:");
     let transaction_to_check = Transaction::new(sender.clone(), receiver.clone(), amount, nonce, signature1.clone());
@@ -55,6 +55,7 @@ fn main() {
 
     
     // Quick frontend and add function that searches the chain for accounts
-    
+    // Mining transactions
+    //Very simple double spend check. give money each time a block is mined.
 }
 
