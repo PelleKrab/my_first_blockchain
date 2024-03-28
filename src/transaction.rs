@@ -123,4 +123,16 @@ impl Transaction {
     pub fn get_signature(&self) -> &[u8] {
         &self.signature
     }
+
+    
+}
+
+impl std::fmt::Debug for Transaction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Transaction {{ sender: {}, receiver: {}, amount: {}, nonce: {}, signature: {:?} }}",
+            self.sender, self.receiver, self.amount, self.nonce, self.signature
+        )
+    }
 }

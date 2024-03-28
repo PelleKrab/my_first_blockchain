@@ -2,6 +2,7 @@ use crate::transaction::{self, Transaction};
 use libp2p::multihash::Error;
 use log::{error, info};
 use rs_merkle::{algorithms::Sha256 as mk_Sha256, Hasher, MerkleTree};
+use secp256k1::rand::seq::index;
 use serde::Serialize;
 use sha2::{Digest, Sha256 as Sha2_256};
 
@@ -47,15 +48,19 @@ impl Blockchain {
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_secs(),
-            data: vec::Vec::new(),
-            // TO DO:
-            // FIX genisis transaction
+            data: vec![Transaction::new(
+                "me".to_string(),
+                "me".to_string(),
+                10,
+                0,
+                "coinbase".into(),
+            )],
             merkle_root: Self::calculate_merkle_root(&vec![Transaction::new(
                 "me".to_string(),
                 "me".to_string(),
+                10,
                 0,
-                0,
-                vec![],
+                "coinbase".into(),
             )])
             .unwrap(),
             previous_hash: "0".to_string(),
@@ -152,19 +157,40 @@ impl Blockchain {
     }
 
     /// Checks if the blockchain is valid.
-    pub fn is_chain_valid(&self, chain: &[Block]) -> bool {
-        chain.windows(2).all(|window| {
-            let first = &window[0];
-            let second = &window[1];
-            self.is_blockpair_valid(second, first)
-        }) && self.is_block_valid(&self.chain.last().unwrap().calculate_hash())
+    pub fn is_chain_valid(&self) -> bool {
+        if self.chain.len() <= 1 {
+            self.is_block_valid(&self.chain.last().unwrap().calculate_hash())
+        } else {
+            self.chain.windows(2).all(|window| {
+                let first = &window[0];
+                let second = &window[1];
+                self.is_blockpair_valid(second, first).is_ok() // Return false if validation fails
+            }) && self.is_block_valid(&self.chain.last().unwrap().calculate_hash())
+        }
     }
 
     /// Checks if a block pair is valid.
-    fn is_blockpair_valid(&self, new: &Block, old: &Block) -> bool {
-        !(new.index != old.index + 1
-            || !self.is_block_valid(&old.calculate_hash())
-            || new.previous_hash != old.calculate_hash())
+    fn is_blockpair_valid(&self, new: &Block, old: &Block) -> Result<(), &str> {
+        if new.index != old.index + 1 {
+            panic!("Invalid block index");
+        }
+
+        if !self.is_block_valid(&old.calculate_hash()) {
+            panic!("Invalid previous block hash");
+        }
+
+        if new.previous_hash != old.calculate_hash() {
+            let new_hash = new.get_previous_hash();
+            let new_hash1 = new.get_hash();
+            let prev_hash = old.calculate_hash();
+            let index1 = new.get_nonce();
+
+            if new.previous_hash != prev_hash {
+                panic!("Invalid previous hash");
+            }
+        }
+
+        Ok(())
     }
 
     /// Checks if a block is valid.
@@ -186,7 +212,7 @@ impl Blockchain {
                 info!("nonce: {}", nonce);
             }
 
-            let last_block = self.chain.last().unwrap();
+            let last_block = self.chain.get(self.chain.len() - 1).unwrap();
 
             let mut new_block = Block {
                 index: last_block.index + 1,
@@ -199,6 +225,7 @@ impl Blockchain {
             };
 
             let hash = new_block.calculate_hash();
+            new_block.hash = hash.clone();
 
             if self.is_block_valid(&hash) {
                 return self.add_block(new_block);
@@ -216,7 +243,7 @@ impl Blockchain {
 
     fn verify_transaction_block(&self, transaction: &Transaction, block: &Block) {
         //Check transaction data to merkle in verfy block
-        
+
         !todo!()
     }
 
@@ -230,6 +257,24 @@ impl Blockchain {
 
     pub fn get_difficulty(&self) -> u32 {
         self.difficulty
+    }
+
+
+    /// Prints the entire blockchain.
+    pub fn print_chain(&self) {
+        for block in &self.chain {
+            println!("Block Index: {}", block.get_index());
+            println!("Timestamp: {}", block.get_timestamp());
+            println!("Merkle Root: {:?}", block.merkle_root);
+            println!("Previous Hash: {}", block.get_previous_hash());
+            println!("Hash: {}", block.get_hash());
+            println!("Nonce: {}", block.get_nonce());
+            println!("Data:");
+            for transaction in block.get_data_raw() {
+                println!("  Transaction: {:?}", transaction);
+            }
+            println!("------------------------");
+        }
     }
 }
 
@@ -257,6 +302,10 @@ impl Block {
 
     pub fn get_hash(&self) -> &str {
         &self.hash
+    }
+
+    pub fn get_previous_hash(&self) -> &str {
+        &self.previous_hash
     }
 
     pub fn get_nonce(&self) -> u64 {
