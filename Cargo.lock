@@ -948,6 +948,7 @@ dependencies = [
  "libp2p",
  "libp2p-dns",
  "log",
+ "num_cpus",
  "once_cell",
  "pretty_env_logger",
  "rs_merkle",

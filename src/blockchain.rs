@@ -1,10 +1,12 @@
 use crate::transaction::{self, Transaction};
 use libp2p::multihash::Error;
-use log::{error, info};
+use log::{debug, error, info};
 use rs_merkle::{algorithms::Sha256 as mk_Sha256, Hasher, MerkleTree};
 use secp256k1::rand::seq::index;
 use serde::Serialize;
 use sha2::{Digest, Sha256 as Sha2_256};
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 // use sha256::{digest, try_digest};
 use std::{
@@ -12,7 +14,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
     vec,
 };
-
+#[derive(Clone)]
 pub struct Block {
     index: u128,
     timestamp: u64,
@@ -26,7 +28,7 @@ pub struct Block {
 /// Represents a blockchain.
 pub struct Blockchain {
     chain: Vec<Block>, // The chain of blocks in the blockchain.
-    difficulty: u32,   // The difficulty level for mining new blocks.
+    difficulty: usize,   // The difficulty level for mining new blocks.
 }
 
 impl Blockchain {
@@ -34,7 +36,7 @@ impl Blockchain {
     pub fn new() -> Blockchain {
         Blockchain {
             chain: vec![Blockchain::create_genesis_block()],
-            difficulty: 0,
+            difficulty: 1,
         }
     }
 
@@ -207,6 +209,80 @@ impl Blockchain {
             .unwrap()
             .as_secs();
         let merkleroot = Self::calculate_merkle_root(&data);
+
+        let shared_data = Arc::new(Mutex::new(data.clone()));
+        let shared_merkleroot = Arc::new(Mutex::new(merkleroot.clone().unwrap()));
+        let shared_chain = Arc::new(Mutex::new(self.chain.clone()));
+        let shared_difficulty = Arc::new(Mutex::new(self.difficulty));
+
+        let num_threads = num_cpus::get();
+        let mut handles = vec![];
+
+        for _ in 0..num_threads {
+            let shared_data = Arc::clone(&shared_data);
+            let shared_merkleroot = Arc::clone(&shared_merkleroot);
+            let shared_chain = Arc::clone(&shared_chain);
+            let difficulty = self.difficulty;
+
+            let handle = thread::spawn(move || {
+                let mut nonce = 0;
+                let mut timestamp = _timestamp;
+
+
+                loop {
+                    let shared_chain_lock = shared_chain.lock().unwrap();
+                    let last_block = shared_chain_lock.last().unwrap();
+
+                    let mut new_block = Block {
+                        index: last_block.index + 1,
+                        timestamp,
+                        data: shared_data.lock().unwrap().clone(),
+                        merkle_root: shared_merkleroot.lock().unwrap().clone(),
+                        previous_hash: last_block.hash.clone(),
+                        hash: String::new(),
+                        nonce: nonce,
+                    };
+
+                    let hash = new_block.calculate_hash();
+                    new_block.hash = hash.clone();
+
+                    if new_block.is_block_valid(difficulty as usize) {
+                        return Some(new_block);
+                    }
+
+                    if nonce % 100000 == 0 {
+                        timestamp = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs();
+                    }
+
+                    nonce += 1;
+                }
+            });
+
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            if let Some(new_block) = handle.join().unwrap() {
+                if self.add_block(new_block) {
+                    return true;
+                }
+            }
+        }
+        false
+
+    }
+
+    pub fn mine_block_singlethread(&mut self, data: &Vec<Transaction>) -> bool {
+        info!("mining block...");
+        let mut nonce = 0;
+        let mut _timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let merkleroot = Self::calculate_merkle_root(&data);
         loop {
             if nonce % 10000 == 0 {
                 info!("nonce: {}", nonce);
@@ -241,12 +317,6 @@ impl Blockchain {
         }
     }
 
-    fn verify_transaction_block(&self, transaction: &Transaction, block: &Block) {
-        //Check transaction data to merkle in verfy block
-
-        !todo!()
-    }
-
     pub fn get_chain(&self) -> &Vec<Block> {
         &self.chain
     }
@@ -255,7 +325,7 @@ impl Blockchain {
         self.chain.len()
     }
 
-    pub fn get_difficulty(&self) -> u32 {
+    pub fn get_difficulty(&self) -> usize {
         self.difficulty
     }
 
@@ -276,6 +346,7 @@ impl Blockchain {
             println!("------------------------");
         }
     }
+
 }
 
 impl Block {
@@ -285,9 +356,15 @@ impl Block {
         hasher.update(&self.timestamp.to_string().as_bytes());
         hasher.update(&self.merkle_root);
         hasher.update(&self.previous_hash.as_bytes());
+        hasher.update(&self.nonce.to_be_bytes());
 
         format!("{:x}", hasher.finalize())
     }
+
+    fn is_block_valid(&self,difficulty: usize) -> bool {
+        self.hash.starts_with(&"0".repeat(difficulty))
+    }
+
     pub fn get_index(&self) -> u128 {
         self.index
     }
