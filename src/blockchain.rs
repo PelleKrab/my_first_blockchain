@@ -199,7 +199,7 @@ impl Blockchain {
     }
 
     /// Mines a new block with the given data.
-    pub fn mine_block(&mut self, data: Vec<Transaction>) -> bool {
+    pub fn mine_block(&mut self, data: &Vec<Transaction>) -> bool {
         info!("mining block...");
         let mut nonce = 0;
         let mut _timestamp = SystemTime::now()

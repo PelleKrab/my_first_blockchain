@@ -41,7 +41,7 @@ fn main() {
     let mut blockchain = Blockchain::new();
     let data = vec!(transaction1,transaction2);
 
-    let result = blockchain.mine_block(data);
+    let result = blockchain.mine_block(&data);
 
     assert_eq!(result, true);
 
