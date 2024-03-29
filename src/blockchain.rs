@@ -1,10 +1,13 @@
 use crate::transaction::{self, Transaction};
+use libp2p::futures::channel;
+use libp2p::futures::executor::ThreadPool;
 use libp2p::multihash::Error;
 use log::{debug, error, info};
 use rs_merkle::{algorithms::Sha256 as mk_Sha256, Hasher, MerkleTree};
 use secp256k1::rand::seq::index;
 use serde::Serialize;
 use sha2::{Digest, Sha256 as Sha2_256};
+use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -26,9 +29,10 @@ pub struct Block {
 }
 
 /// Represents a blockchain.
+#[derive(Clone)]
 pub struct Blockchain {
     chain: Vec<Block>, // The chain of blocks in the blockchain.
-    difficulty: usize,   // The difficulty level for mining new blocks.
+    difficulty: usize, // The difficulty level for mining new blocks.
 }
 
 impl Blockchain {
@@ -36,7 +40,7 @@ impl Blockchain {
     pub fn new() -> Blockchain {
         Blockchain {
             chain: vec![Blockchain::create_genesis_block()],
-            difficulty: 1,
+            difficulty: 4,
         }
     }
 
@@ -173,6 +177,11 @@ impl Blockchain {
 
     /// Checks if a block pair is valid.
     fn is_blockpair_valid(&self, new: &Block, old: &Block) -> Result<(), &str> {
+        // Genesis block edge case
+        if old.index == 0 {
+            return Ok(());
+        }
+
         if new.index != old.index + 1 {
             panic!("Invalid block index");
         }
@@ -182,12 +191,7 @@ impl Blockchain {
         }
 
         if new.previous_hash != old.calculate_hash() {
-            let new_hash = new.get_previous_hash();
-            let new_hash1 = new.get_hash();
-            let prev_hash = old.calculate_hash();
-            let index1 = new.get_nonce();
-
-            if new.previous_hash != prev_hash {
+            if new.previous_hash != old.calculate_hash() {
                 panic!("Invalid previous hash");
             }
         }
@@ -200,79 +204,80 @@ impl Blockchain {
         hash.starts_with(&"0".repeat(self.difficulty as usize))
     }
 
-    /// Mines a new block with the given data.
-    pub fn mine_block(&mut self, data: &Vec<Transaction>) -> bool {
-        info!("mining block...");
-        let mut nonce = 0;
-        let mut _timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        let merkleroot = Self::calculate_merkle_root(&data);
+    pub fn mine_block(
+        &mut self,
+        data: Arc<Vec<Transaction>>,
+        blockchain: Arc<Mutex<Blockchain>>,
+    ) -> bool {
+        let cores = num_cpus::get();
+        let mut handlers = vec![];
 
-        let shared_data = Arc::new(Mutex::new(data.clone()));
-        let shared_merkleroot = Arc::new(Mutex::new(merkleroot.clone().unwrap()));
-        let shared_chain = Arc::new(Mutex::new(self.chain.clone()));
-        let shared_difficulty = Arc::new(Mutex::new(self.difficulty));
+        // Move the blockchain-related calculations outside of the threads
+        let bc = blockchain.lock().unwrap();
+        let last_block = bc.chain.get(bc.chain.len() - 1).unwrap();
+        let last_index = last_block.index + 1;
+        let last_hash = last_block.hash.clone();
+        let merkleroot = Self::calculate_merkle_root(&data).unwrap();
+        drop(bc); // Explicitly drop the lock here to allow threads to use the blockchain later
 
-        let num_threads = num_cpus::get();
-        let mut handles = vec![];
+        for i in 0..cores {
+            let data_clone = Arc::clone(&data);
+            let blockchain_clone = Arc::clone(&blockchain);
+            let last_hash_clone = last_hash.clone();
+            let merkleroot_clone = merkleroot.clone();
 
-        for _ in 0..num_threads {
-            let shared_data = Arc::clone(&shared_data);
-            let shared_merkleroot = Arc::clone(&shared_merkleroot);
-            let shared_chain = Arc::clone(&shared_chain);
-            let difficulty = self.difficulty;
-
-            let handle = thread::spawn(move || {
-                let mut nonce = 0;
-                let mut timestamp = _timestamp;
-
+            let handler = thread::spawn(move || {
+                let mut nonce = i as u64;
+                let nonce_step = cores;
+                let mut _timestamp = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+                let mut new_block = Block {
+                    index: last_index,
+                    timestamp: _timestamp,
+                    data: (*data_clone).clone(),
+                    merkle_root: merkleroot_clone.clone(),
+                    previous_hash: last_hash_clone.clone(),
+                    hash: String::new(),
+                    nonce: nonce,
+                };
 
                 loop {
-                    let shared_chain_lock = shared_chain.lock().unwrap();
-                    let last_block = shared_chain_lock.last().unwrap();
-
-                    let mut new_block = Block {
-                        index: last_block.index + 1,
-                        timestamp,
-                        data: shared_data.lock().unwrap().clone(),
-                        merkle_root: shared_merkleroot.lock().unwrap().clone(),
-                        previous_hash: last_block.hash.clone(),
-                        hash: String::new(),
-                        nonce: nonce,
-                    };
+                    new_block.nonce = nonce;
 
                     let hash = new_block.calculate_hash();
-                    new_block.hash = hash.clone();
 
-                    if new_block.is_block_valid(difficulty as usize) {
-                        return Some(new_block);
+                    {
+                        let mut bc = blockchain_clone.lock().unwrap();
+                        if bc.is_block_valid(&hash) {
+                            new_block.hash = hash;
+                            bc.add_block(new_block);
+                            return true;
+                        }
                     }
 
-                    if nonce % 100000 == 0 {
-                        timestamp = SystemTime::now()
+                    nonce += nonce_step as u64;
+
+                    if nonce % 1000000 == 0 {
+                        new_block.timestamp = SystemTime::now()
                             .duration_since(UNIX_EPOCH)
                             .unwrap()
                             .as_secs();
                     }
-
-                    nonce += 1;
                 }
             });
 
-            handles.push(handle);
+            handlers.push(handler);
         }
 
-        for handle in handles {
-            if let Some(new_block) = handle.join().unwrap() {
-                if self.add_block(new_block) {
-                    return true;
-                }
+        for handler in handlers {
+            if handler.join().unwrap() {
+                return true; // If any thread returns true, the block was mined successfully
             }
         }
-        false
 
+        false // If no threads mined the block successfully
     }
 
     pub fn mine_block_singlethread(&mut self, data: &Vec<Transaction>) -> bool {
@@ -329,7 +334,6 @@ impl Blockchain {
         self.difficulty
     }
 
-
     /// Prints the entire blockchain.
     pub fn print_chain(&self) {
         for block in &self.chain {
@@ -346,7 +350,6 @@ impl Blockchain {
             println!("------------------------");
         }
     }
-
 }
 
 impl Block {
@@ -361,7 +364,7 @@ impl Block {
         format!("{:x}", hasher.finalize())
     }
 
-    fn is_block_valid(&self,difficulty: usize) -> bool {
+    fn is_block_valid(&self, difficulty: usize) -> bool {
         self.hash.starts_with(&"0".repeat(difficulty))
     }
 

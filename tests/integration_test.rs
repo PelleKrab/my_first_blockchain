@@ -5,7 +5,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[cfg(test)]
 mod tests {
 
-    use std::vec;
+    use std::{
+        sync::{Arc, Mutex},
+        vec,
+    };
 
     use my_first_blockchain::{
         transaction::Transaction,
@@ -250,11 +253,14 @@ mod tests {
             ],
         ];
 
+        let arc_blockchain = Arc::new(Mutex::new(blockchain.clone()));
+
         for data in transactions {
-            blockchain.mine_block(&data);
+            let transactions = Arc::new(data.clone());
+            blockchain.mine_block(transactions, Arc::clone(&arc_blockchain));
         }
-        assert_eq!(blockchain.is_chain_valid(), true);
-        // assert_eq!(blockchain.is_chain_valid(), true);
+        let updated_blockchain = arc_blockchain.lock().unwrap();
+        assert_eq!(updated_blockchain.is_chain_valid(), true);
     }
 
     #[test]
@@ -277,7 +283,11 @@ mod tests {
             ),
         )];
 
-        let result = blockchain.mine_block(&data);
+        let arc_blockchain = Arc::new(Mutex::new(blockchain.clone()));
+        let transactions = Arc::new(data.clone());
+        let result = blockchain.mine_block(transactions, Arc::clone(&arc_blockchain));
+
+        let blockchain = arc_blockchain.lock().unwrap();
 
         assert_eq!(result, true);
         assert_eq!(blockchain.get_chain().len(), 2);
@@ -345,7 +355,11 @@ mod tests {
         );
 
         let mut blockchain = Blockchain::new();
-        blockchain.mine_block(&tx_list);
+        let arc_blockchain = Arc::new(Mutex::new(blockchain.clone()));
+        let transactions = Arc::new(tx_list.clone());
+        blockchain.mine_block(transactions, Arc::clone(&arc_blockchain));
+
+        let mut blockchain = arc_blockchain.lock().unwrap();
 
         let result1 = blockchain.check_transaction_validity(&tx_list[0]);
         let result2 = blockchain.check_transaction_validity(&tx_list[1]);
