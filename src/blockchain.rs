@@ -4,18 +4,15 @@ use rs_merkle::{algorithms::Sha256 as mk_Sha256, Hasher, MerkleTree};
 use sha2::{Digest, Sha256 as Sha2_256};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::{SystemTime, UNIX_EPOCH};
+use std::vec::Vec;
 
-// use sha256::{digest, try_digest};
-use std::{
-    time::{SystemTime, UNIX_EPOCH},
-    vec,
-};
 #[derive(Clone)]
 pub struct Block {
     index: u128,
     timestamp: u64,
     merkle_root: [u8; 32],
-    data: vec::Vec<Transaction>,
+    data: Vec<Transaction>,
     previous_hash: String,
     hash: String,
     nonce: u64,
@@ -27,6 +24,23 @@ pub struct Blockchain {
     chain: Vec<Block>, // The chain of blocks in the blockchain.
     difficulty: usize, // The difficulty level for mining new blocks.
 }
+
+#[derive(Debug)]
+pub enum BlockchainError {
+    MerkleTreeError(String),
+}
+
+impl std::fmt::Display for BlockchainError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match *self {
+            BlockchainError::MerkleTreeError(ref cause) => {
+                write!(f, "Merkle Tree Error: {}", cause)
+            }
+        }
+    }
+}
+
+impl std::error::Error for BlockchainError {}
 
 impl Blockchain {
     /// Creates a new instance of the blockchain with a genesis block.
@@ -64,12 +78,13 @@ impl Blockchain {
             hash: "0".to_string(),
             nonce: 0,
         };
+
         genesis_block.hash = genesis_block.calculate_hash();
 
         genesis_block
     }
 
-    fn calculate_merkle_tree(tx_list: &Vec<Transaction>) -> Result<MerkleTree<mk_Sha256>, &str> {
+    fn calculate_merkle_tree(tx_list: &[Transaction]) -> Result<MerkleTree<mk_Sha256>, &str> {
         let leaves: Vec<[u8; 32]> = tx_list
             .iter()
             .map(|x| mk_Sha256::hash(x.serialize().as_bytes()))
@@ -78,7 +93,7 @@ impl Blockchain {
         Ok(MerkleTree::<mk_Sha256>::from_leaves(&leaves))
     }
 
-    fn calculate_merkle_root(tx_list: &Vec<Transaction>) -> Result<[u8; 32], &str> {
+    fn calculate_merkle_root(tx_list: &[Transaction]) -> Result<[u8; 32], &str> {
         let merkle_tree = Self::calculate_merkle_tree(tx_list)?;
         let merkle_root = merkle_tree.root().ok_or("couldn't get the merkle root")?;
         Ok(merkle_root)
@@ -166,7 +181,7 @@ impl Blockchain {
         }
     }
 
-    /// Checks if a block pair is valid.
+    /// Checks if a block pair is valid. #########################################
     fn is_blockpair_valid(&self, new: &Block, old: &Block) -> Result<(), &str> {
         // Genesis block edge case
         if old.index == 0 {
@@ -210,7 +225,7 @@ impl Blockchain {
         let last_hash = last_block.hash.clone();
         let merkleroot = Self::calculate_merkle_root(&data).unwrap();
         // Drop the lock to allow threads to use the blockchain later
-        drop(bc); 
+        drop(bc);
 
         for i in 0..cores {
             let data_clone = Arc::clone(&data);
@@ -266,11 +281,11 @@ impl Blockchain {
         for handler in handlers {
             // If thread returns true, the block was mined successfully
             if handler.join().unwrap() {
-                return true; 
+                return true;
             }
         }
 
-        false 
+        false
     }
 
     pub fn mine_block_singlethread(&mut self, data: &Vec<Transaction>) -> bool {
