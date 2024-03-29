@@ -7,7 +7,6 @@ use std::thread;
 
 // use sha256::{digest, try_digest};
 use std::{
-    string,
     time::{SystemTime, UNIX_EPOCH},
     vec,
 };
@@ -40,8 +39,6 @@ impl Blockchain {
 
     /// Creates the genesis block of the blockchain.
     fn create_genesis_block() -> Block {
-        // Create a new block with index 0, current timestamp, "Genesis Block" as data,
-        // "0" as previous hash, "0" as hash, and nonce 0.
         let mut genesis_block = Block {
             index: 0,
             timestamp: SystemTime::now()
@@ -164,7 +161,7 @@ impl Blockchain {
             self.chain.windows(2).all(|window| {
                 let first = &window[0];
                 let second = &window[1];
-                self.is_blockpair_valid(second, first).is_ok() // Return false if validation fails
+                self.is_blockpair_valid(second, first).is_ok()
             }) && self.is_block_valid(&self.chain.last().unwrap().calculate_hash())
         }
     }
@@ -212,7 +209,8 @@ impl Blockchain {
         let last_index = last_block.index + 1;
         let last_hash = last_block.hash.clone();
         let merkleroot = Self::calculate_merkle_root(&data).unwrap();
-        drop(bc); // Explicitly drop the lock here to allow threads to use the blockchain later
+        // Drop the lock to allow threads to use the blockchain later
+        drop(bc); 
 
         for i in 0..cores {
             let data_clone = Arc::clone(&data);
@@ -266,12 +264,13 @@ impl Blockchain {
         }
 
         for handler in handlers {
+            // If thread returns true, the block was mined successfully
             if handler.join().unwrap() {
-                return true; // If any thread returns true, the block was mined successfully
+                return true; 
             }
         }
 
-        false // If no threads mined the block successfully
+        false 
     }
 
     pub fn mine_block_singlethread(&mut self, data: &Vec<Transaction>) -> bool {
@@ -328,7 +327,6 @@ impl Blockchain {
         self.difficulty
     }
 
-    /// Prints the entire blockchain.
     pub fn print_chain(&self) {
         for block in &self.chain {
             println!("Block Index: {}", block.get_index());
@@ -356,10 +354,6 @@ impl Block {
         hasher.update(&self.nonce.to_be_bytes());
 
         format!("{:x}", hasher.finalize())
-    }
-
-    fn is_block_valid(&self, difficulty: usize) -> bool {
-        self.hash.starts_with(&"0".repeat(difficulty))
     }
 
     pub fn get_index(&self) -> u128 {
