@@ -25,17 +25,23 @@ pub struct Blockchain {
     difficulty: usize, // The difficulty level for mining new blocks.
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BlockchainError {
-    MerkleTreeError(String),
+    MerkleRootError(String),
+    BlockInvalid(String),
+    MerkleProofError(String),
+    ChainInvalid,
+    TransactionNotFound,
 }
 
 impl std::fmt::Display for BlockchainError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match *self {
-            BlockchainError::MerkleTreeError(ref cause) => {
-                write!(f, "Merkle Tree Error: {}", cause)
-            }
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BlockchainError::MerkleRootError(ref err) => write!(f, "Merkle Root Error: {}", err),
+            BlockchainError::BlockInvalid(ref err) => write!(f, "Block Invalid: {}", err),
+            BlockchainError::MerkleProofError(message) => {write!(f, "Merkle proof error: {}", message)}
+            BlockchainError::ChainInvalid => write!(f, "Blockchain is invalid"),
+            BlockchainError::TransactionNotFound => write!(f, "Transaction not found"),
         }
     }
 }
@@ -89,13 +95,17 @@ impl Blockchain {
             .iter()
             .map(|x| mk_Sha256::hash(x.serialize().as_bytes()))
             .collect();
-
         Ok(MerkleTree::<mk_Sha256>::from_leaves(&leaves))
     }
 
-    fn calculate_merkle_root(tx_list: &[Transaction]) -> Result<[u8; 32], &str> {
-        let merkle_tree = Self::calculate_merkle_tree(tx_list)?;
-        let merkle_root = merkle_tree.root().ok_or("couldn't get the merkle root")?;
+    fn calculate_merkle_root(tx_list: &[Transaction]) -> Result<[u8; 32], BlockchainError> {
+        let merkle_tree = Self::calculate_merkle_tree(tx_list)
+            .map_err(|e| BlockchainError::MerkleRootError(e.to_string()))?;
+
+        let merkle_root = merkle_tree.root().ok_or_else(|| {
+            BlockchainError::MerkleRootError("couldn't get the merkle root".to_string())
+        })?;
+
         Ok(merkle_root)
     }
 
@@ -104,29 +114,25 @@ impl Blockchain {
         transaction: &Transaction,
         block_index: usize,
         tx_index: usize,
-    ) -> bool {
-        let leaves: Vec<[u8; 32]> = self
-            .chain
-            .get(block_index)
-            .unwrap()
+    ) -> Result<bool, BlockchainError> {
+        let block = self.chain.get(block_index).ok_or_else(|| {
+            BlockchainError::MerkleProofError("Block index out of bounds.".into())
+        })?;
+
+        let leaves: Vec<[u8; 32]> = block
             .get_data_raw()
             .iter()
             .map(|x| mk_Sha256::hash(x.serialize().as_bytes()))
             .collect();
 
         let merkle_tree = MerkleTree::<mk_Sha256>::from_leaves(&leaves);
-
         let proof = merkle_tree.proof(&[tx_index]);
-        let indice_to_prove = [tx_index];
         let leave_to_prove = [mk_Sha256::hash(transaction.serialize().as_bytes())];
-        let root = merkle_tree.root().ok_or("couldn't get the merkle root");
+        let root = merkle_tree.root().ok_or_else(|| {
+            BlockchainError::MerkleProofError("Couldn't get the Merkle root.".into())
+        })?;
 
-        proof.verify(
-            root.unwrap(),
-            &indice_to_prove,
-            &leave_to_prove,
-            leaves.len(),
-        )
+        Ok(proof.verify(root, &[tx_index], &leave_to_prove, leaves.len()))
     }
 
     fn find_block(&self, transaction: &Transaction) -> Result<(usize, usize), &str> {
@@ -150,12 +156,15 @@ impl Blockchain {
             }
         };
 
-        self.merkle_transaction_proof(transaction, block_index, tx_index)
+        self.merkle_transaction_proof(transaction, block_index, tx_index).expect("merkle_transaction_proof() failed")
     }
 
     /// Adds a new block to the blockchain.
     pub fn add_block(&mut self, new_block: Block) -> bool {
-        let last_block = self.chain.last().unwrap();
+        let last_block = self
+            .chain
+            .last()
+            .expect("Chain should have at least one block");
 
         if self.is_block_valid(&new_block.calculate_hash())
             && new_block.index == last_block.index + 1
