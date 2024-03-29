@@ -1,13 +1,7 @@
-use crate::transaction::{self, Transaction};
-use libp2p::futures::channel;
-use libp2p::futures::executor::ThreadPool;
-use libp2p::multihash::Error;
-use log::{debug, error, info};
+use crate::transaction::Transaction;
+use log::{error, info};
 use rs_merkle::{algorithms::Sha256 as mk_Sha256, Hasher, MerkleTree};
-use secp256k1::rand::seq::index;
-use serde::Serialize;
 use sha2::{Digest, Sha256 as Sha2_256};
-use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 use std::thread;
 

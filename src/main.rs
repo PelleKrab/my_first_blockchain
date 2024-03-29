@@ -1,8 +1,7 @@
-use my_first_blockchain::{blockchain, transaction};
+use my_first_blockchain::transaction;
 use my_first_blockchain::utils::{public_key_to_address, sign_transaction};
 use my_first_blockchain::{blockchain::Blockchain, utils::generate_key_pair};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
 use transaction::Transaction;
 
 fn main() {

@@ -1,9 +1,5 @@
-use secp256k1::{
-    ecdsa::RecoverableSignature, ecdsa::RecoveryId, ecdsa::Signature, Message, Secp256k1,
-};
+use secp256k1::Message;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use sha2::{Sha256};
 use sha3::{Digest, Keccak256};
 
 use crate::utils::{public_key_to_address, recover_public_key};
@@ -47,18 +43,17 @@ impl Transaction {
 
     // Method to verify the transaction's signature
     pub fn verify_signature(&self) -> bool {
-        let message = Message::from_digest_slice(&self.calculate_hash()).expect("Failed to convert message hash");
+        let message = Message::from_digest_slice(&self.calculate_hash())
+            .expect("Failed to convert message hash");
         let public_key = recover_public_key(&message, &self.signature).unwrap();
 
         let address = public_key_to_address(&public_key);
-        if address != self.sender && address != self.receiver && self.amount == 0{
+        if address != self.sender && address != self.receiver && self.amount == 0 {
             return false;
         }
 
-        
         true
     }
-
 
     // Serialize the transaction into a JSON string
     pub fn serialize(&self) -> String {
@@ -92,7 +87,6 @@ impl Transaction {
         println!("{:?}", self.to_string());
     }
 
-
     fn to_string(&self) -> String {
         format!(
             "Sender: {}\nReceiver: {}\nAmount: {}\nNonce: {}\nSignature: {:?}",
@@ -123,8 +117,6 @@ impl Transaction {
     pub fn get_signature(&self) -> &[u8] {
         &self.signature
     }
-
-    
 }
 
 impl std::fmt::Debug for Transaction {

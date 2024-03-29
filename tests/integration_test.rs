@@ -1,6 +1,4 @@
-use my_first_blockchain::blockchain::Block;
 use my_first_blockchain::blockchain::Blockchain;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(test)]
 mod tests {

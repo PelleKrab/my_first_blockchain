@@ -1,14 +1,10 @@
-use secp256k1::{Secp256k1, Message, PublicKey};
-use sha3::{Digest, Keccak256};
-
 struct Account {
-    address: String, 
-    balance: u64,  
-    nonce: u64,     
+    address: String,
+    balance: u64,
+    nonce: u64,
 }
 //Need to scan the chain for information about the account
 impl Account {
-
     fn new(address: String) -> Self {
         Account {
             address,
@@ -33,8 +29,9 @@ impl Account {
 
     // Displays account information
     fn display_info(&self) {
-        println!("Address: {}\nBalance: {}\nNonce: {}", self.address, self.balance, self.nonce);
+        println!(
+            "Address: {}\nBalance: {}\nNonce: {}",
+            self.address, self.balance, self.nonce
+        );
     }
-
-
 }
