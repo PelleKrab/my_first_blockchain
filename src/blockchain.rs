@@ -135,7 +135,7 @@ impl Blockchain {
         Ok(proof.verify(root, &[tx_index], &leave_to_prove, leaves.len()))
     }
 
-    fn find_block(&self, transaction: &Transaction) -> Result<(usize, usize), &str> {
+    fn find_block(&self, transaction: &Transaction) -> Result<(usize, usize), BlockchainError> {
         for (block_index, block) in self.chain.iter().enumerate() {
             // Use the index variable here
             for (tx_index, tx) in block.get_data_raw().iter().enumerate() {
@@ -144,7 +144,7 @@ impl Blockchain {
                 }
             }
         }
-        Err("Transaction not found")
+        Err(BlockchainError::TransactionNotFound)
     }
 
     pub fn check_transaction_validity(&mut self, transaction: &Transaction) -> bool {
