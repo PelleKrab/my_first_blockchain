@@ -39,7 +39,9 @@ impl std::fmt::Display for BlockchainError {
         match self {
             BlockchainError::MerkleRootError(ref err) => write!(f, "Merkle Root Error: {}", err),
             BlockchainError::BlockInvalid(ref err) => write!(f, "Block Invalid: {}", err),
-            BlockchainError::MerkleProofError(message) => {write!(f, "Merkle proof error: {}", message)}
+            BlockchainError::MerkleProofError(message) => {
+                write!(f, "Merkle proof error: {}", message)
+            }
             BlockchainError::ChainInvalid => write!(f, "Blockchain is invalid"),
             BlockchainError::TransactionNotFound => write!(f, "Transaction not found"),
         }
@@ -147,16 +149,12 @@ impl Blockchain {
         Err(BlockchainError::TransactionNotFound)
     }
 
-    pub fn check_transaction_validity(&mut self, transaction: &Transaction) -> bool {
-        let (block_index, tx_index) = match self.find_block(transaction) {
-            Ok((block_index, tx_index)) => (block_index, tx_index),
-            Err(_) => {
-                // Transaction not found
-                return false;
-            }
-        };
-
-        self.merkle_transaction_proof(transaction, block_index, tx_index).expect("merkle_transaction_proof() failed")
+    pub fn check_transaction_validity(
+        &mut self,
+        transaction: &Transaction,
+    ) -> Result<bool, BlockchainError> {
+        let (block_index, tx_index) = self.find_block(transaction)?;
+        self.merkle_transaction_proof(transaction, block_index, tx_index)
     }
 
     /// Adds a new block to the blockchain.
