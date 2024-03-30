@@ -56,7 +56,7 @@ fn main() {
     }
 
     // Check the transaction's inclusion in the Merkle tree
-    if blockchain.check_transaction_validity(&transaction1[0]) {
+    if blockchain.check_transaction_validity(&transaction1[0]).unwrap_or(false) {
         println!("The transaction is included in the Merkle tree.");
     } else {
         println!("The transaction is not included in the Merkle tree.");

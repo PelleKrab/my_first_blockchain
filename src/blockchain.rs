@@ -4,7 +4,7 @@ use rs_merkle::{algorithms::Sha256 as mk_Sha256, Hasher, MerkleTree};
 use sha2::{Digest, Sha256 as Sha2_256};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::vec::Vec;
 
 #[derive(Clone)]
@@ -65,7 +65,10 @@ impl Blockchain {
             index: 0,
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_else(|e| {
+                    eprintln!("Error getting time since UNIX EPOCH: {:?}", e);
+                    Duration::from_secs(0)
+                })
                 .as_secs(),
             data: vec![Transaction::new(
                 "me".to_string(),
@@ -159,36 +162,43 @@ impl Blockchain {
 
     /// Adds a new block to the blockchain.
     pub fn add_block(&mut self, new_block: Block) -> bool {
-        let last_block = self
-            .chain
-            .last()
-            .expect("Chain should have at least one block");
-
-        if self.is_block_valid(&new_block.calculate_hash())
-            && new_block.index == last_block.index + 1
-        {
-            self.chain.push(new_block);
-            return true;
-        } else {
-            error!("Block is not valid");
-            return false;
+        //checks if the blockchain is empty
+        if let Some(last_block) = self.chain.last() {
+            if !self.is_block_valid(&new_block.calculate_hash())
+                || new_block.index != last_block.index + 1
+            {
+                error!("Block is not valid or does not follow the last block in the chain.");
+                return false;
+            }
         }
+
+        self.chain.push(new_block);
+        true
     }
 
     /// Checks if the blockchain is valid.
     pub fn is_chain_valid(&self) -> bool {
         if self.chain.len() <= 1 {
-            self.is_block_valid(&self.chain.last().unwrap().calculate_hash())
-        } else {
-            self.chain.windows(2).all(|window| {
-                let first = &window[0];
-                let second = &window[1];
-                self.is_blockpair_valid(second, first).is_ok()
-            }) && self.is_block_valid(&self.chain.last().unwrap().calculate_hash())
+            return self
+                .chain
+                .last()
+                .map(|block| self.is_block_valid(&block.calculate_hash()))
+                .unwrap_or(true);
         }
+        self.chain.windows(2).all(|window| {
+            if let [first, second] = window {
+                self.is_blockpair_valid(second, first).is_ok()
+            } else {
+                false
+            }
+        }) && self
+            .chain
+            .last()
+            .map(|block| self.is_block_valid(&block.calculate_hash()))
+            .unwrap_or(false)
     }
 
-    /// Checks if a block pair is valid. #########################################
+    /// Checks if a block pair is valid.
     fn is_blockpair_valid(&self, new: &Block, old: &Block) -> Result<(), &str> {
         // Genesis block edge case
         if old.index == 0 {
@@ -226,11 +236,31 @@ impl Blockchain {
         let mut handlers = vec![];
 
         // Move the blockchain-related calculations outside of the threads
-        let bc = blockchain.lock().unwrap();
-        let last_block = bc.chain.get(bc.chain.len() - 1).unwrap();
+        let bc = match blockchain.lock() {
+            Ok(bc) => bc,
+            Err(e) => {
+                log::error!("Failed to acquire blockchain lock: {:?}", e);
+                return false;
+            }
+        };
+        let last_block = match bc.chain.last() {
+            Some(block) => block,
+            None => {
+                log::error!("The blockchain is empty.");
+                return false;
+            }
+        };
+
         let last_index = last_block.index + 1;
         let last_hash = last_block.hash.clone();
-        let merkleroot = Self::calculate_merkle_root(&data).unwrap();
+        let merkleroot = match Self::calculate_merkle_root(&data) {
+            Ok(root) => root,
+            Err(e) => {
+                log::error!("Failed to calculate Merkle root: {}", e);
+                return false; // Return false to indicate failure
+            }
+        };
+
         // Drop the lock to allow threads to use the blockchain later
         drop(bc);
 
@@ -245,7 +275,10 @@ impl Blockchain {
                 let nonce_step = cores;
                 let mut _timestamp = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
-                    .unwrap()
+                    .unwrap_or_else(|e| {
+                        eprintln!("Error getting time since UNIX EPOCH: {:?}", e);
+                        Duration::from_secs(0)
+                    })
                     .as_secs();
                 let mut new_block = Block {
                     index: last_index,
@@ -263,7 +296,13 @@ impl Blockchain {
                     let hash = new_block.calculate_hash();
 
                     {
-                        let mut bc = blockchain_clone.lock().unwrap();
+                        let mut bc = match blockchain_clone.lock() {
+                            Ok(bc) => bc,
+                            Err(e) => {
+                                log::error!("Failed to acquire blockchain lock: {:?}", e);
+                                return false;
+                            }
+                        };
                         if bc.is_block_valid(&hash) {
                             new_block.hash = hash;
                             bc.add_block(new_block);
@@ -276,7 +315,10 @@ impl Blockchain {
                     if nonce % 1000000 == 0 {
                         new_block.timestamp = SystemTime::now()
                             .duration_since(UNIX_EPOCH)
-                            .unwrap()
+                            .unwrap_or_else(|e| {
+                                eprintln!("Error getting time since UNIX EPOCH: {:?}", e);
+                                Duration::from_secs(0)
+                            })
                             .as_secs();
                     }
                 }
@@ -286,21 +328,29 @@ impl Blockchain {
         }
 
         for handler in handlers {
-            // If thread returns true, the block was mined successfully
-            if handler.join().unwrap() {
-                return true;
+            match handler.join() {
+                Ok(success) if success => return true, // If the thread returns true, the block was mined successfully.
+                Ok(_) => continue, // The thread finished but didn't mine the block successfully.
+                Err(e) => {
+                    log::error!("A thread panicked while mining: {:?}", e);
+                }
             }
         }
+        
 
         false
     }
 
+    //Legacy function
     pub fn mine_block_singlethread(&mut self, data: &Vec<Transaction>) -> bool {
         info!("mining block...");
         let mut nonce = 0;
         let mut _timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|e| {
+                eprintln!("Error getting time since UNIX EPOCH: {:?}", e);
+                Duration::from_secs(0)
+            })
             .as_secs();
         let merkleroot = Self::calculate_merkle_root(&data);
         loop {
@@ -329,7 +379,10 @@ impl Blockchain {
             if nonce % 100000 == 0 {
                 new_block.timestamp = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
-                    .unwrap()
+                    .unwrap_or_else(|e| {
+                        eprintln!("Error getting time since UNIX EPOCH: {:?}", e);
+                        Duration::from_secs(0)
+                    })
                     .as_secs();
             }
 
