@@ -364,9 +364,9 @@ mod tests {
         let result3 = blockchain.check_transaction_validity(&tx_list[1]);
         let result4 = blockchain.check_transaction_validity(&fake_transaction);
 
-        assert_eq!(result1, true);
-        assert_eq!(result2, true);
-        assert_eq!(result3, true);
-        assert_ne!(result4, true)
+        assert_eq!(result1, Ok(true));
+        assert_eq!(result2, Ok(true));
+        assert_eq!(result3, Ok(true));
+        assert_ne!(result4, Ok(true))
     }
 }
