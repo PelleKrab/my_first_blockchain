@@ -23,6 +23,9 @@ Contributions are welcome! If you have ideas for improvements or want to add new
 - Implementation of account and validator logic.
 - Exploration of state checks, gas mechanisms, and various consensus algorithms.
 
+## Website
+Visit <a href="http://pellekrab.com" target="_blank">pellekrab.com</a>.
+
 ## License
 
 MIT License
